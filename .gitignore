@@ -150,3 +150,12 @@ vite.config.ts.timestamp-*
 # Solana
 .anchor/
 target/
+
+# Secrets
+.env
+.env.local
+*.key
+
+# Solana
+.anchor/
+target/
