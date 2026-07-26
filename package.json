@@ -1,0 +1,9 @@
+{
+  "name": "realms-sentinel",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "license": "MIT"
+}
