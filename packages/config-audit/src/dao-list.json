@@ -1,0 +1,125 @@
+{
+  "_comment": "Curated list of real Realms DAOs on mainnet-beta. Ordered by estimated treasury size / governance activity. Source: Mythic-Project/governance-ui public/realms/mainnet-beta.json. realmType: 'pda' = address is PDA derived from name; 'keypair' = address was generated as a keypair at deploy time (not derivable from name alone). Phase 0 resolves both via getRealmByPubkey().",
+  "daos": [
+    {
+      "name": "Jito",
+      "symbol": "JTO",
+      "realmId": "jjCAwuuNpJCNMLAanpwgJZ6cdXzLPXe2GfD6TaDQBXt",
+      "programId": "jtogvBNH3WBSWDYD5FJfQP2ZxNTuf82zL8GkEhPeaJx",
+      "realmType": "pda",
+      "notes": "MEV + liquid staking infrastructure; among largest Solana DAO treasuries"
+    },
+    {
+      "name": "Mango DAO",
+      "symbol": "MNGO",
+      "realmId": "DPiH3H3c7t47BMxqTxLsuPQpEC6Kne8GA9VXbxpnZxFE",
+      "programId": "GqTPL6qRf5aUuqscLh8Rg2HTxPUXfhhAXDptTLhp1t2J",
+      "realmType": "keypair",
+      "notes": "Perps & lending DAO; controls Mango Markets insurance fund"
+    },
+    {
+      "name": "Marinade",
+      "symbol": "MNDE",
+      "realmId": "899YG3yk4F66ZgbNWLHriZHTXSKk9e1kvsKEquW7L6Mo",
+      "programId": "GovMaiHfpVPw8BAM1mbdzgmSZYDw2tdP32J2fapoQoYs",
+      "realmType": "keypair",
+      "notes": "Largest Solana liquid staking DAO; controls mSOL protocol parameters"
+    },
+    {
+      "name": "Drift Protocol",
+      "symbol": "DRIFT",
+      "realmId": "FVVXu18aNUqyFCfq8sGktPM62mqJAGaenv4z6UGUs5em",
+      "programId": "dgov7NC8iaumWw3k8TkmLDybvZBCmd1qwxgLAGAsWxf",
+      "realmType": "keypair",
+      "notes": "Perps DEX; active risk-parameter governance"
+    },
+    {
+      "name": "Pyth Network",
+      "symbol": "PYTH",
+      "realmId": "4ct8XU5tKbMNRphWy4rePsS9kBqPhDdvZoGpmprPaug4",
+      "programId": "pytGY6tWRgGinSCvRLnSv4fHfBTMoiDGiCsesmHWM6U",
+      "realmType": "keypair",
+      "notes": "Largest oracle network on Solana; controls price-feed publisher whitelist"
+    },
+    {
+      "name": "Helium HNT",
+      "symbol": "HNT",
+      "realmId": "2VfPJn8ML1hNBnsEBo7SzmG11UJc7gbY8b23A3K8expd",
+      "programId": "hgovkRU6Ghe1Qoyb54HdSLdqN7VtxaifBzRmh9jtd3S",
+      "realmType": "keypair",
+      "notes": "Top-level Helium DAO; oversees IoT/Mobile subDAOs"
+    },
+    {
+      "name": "Orca DAO",
+      "symbol": "ORCA",
+      "realmId": "66Du7mXgS2KMQBUk6m9h3TszMjqZqdWhsG3Duuf69VNW",
+      "programId": "J9uWvULFL47gtCPvgR3oN7W357iehn5WF2Vn9MJvcSxz",
+      "realmType": "keypair",
+      "notes": "Whirlpools AMM governance"
+    },
+    {
+      "name": "MonkeDAO",
+      "symbol": "SMB",
+      "realmId": "B1CxhV1khhj7n5mi5hebbivesqH9mvXr5Hfh2nD2UCh6",
+      "programId": "GMnke6kxYvqoAXgbFGnu84QzvNHoqqTnijWSXYYTFQbB",
+      "realmType": "keypair",
+      "notes": "Largest Solana NFT community DAO"
+    },
+    {
+      "name": "Metaplex Foundation",
+      "symbol": "MPLX",
+      "realmId": "2sEcHwzsNBwNoTM1yAXjtF1HTMQKUAXf8ivtdpSpo9Fv",
+      "programId": "GmtpXy362L8cZfkRmTZMYunWVe8TyRjX5B7sodPZ63LJ",
+      "realmType": "keypair",
+      "notes": "Controls NFT standard upgrades and MPLX tokenomics"
+    },
+    {
+      "name": "Squads",
+      "symbol": "SQDS",
+      "realmId": "6FYxSU9GE5imNLnqbUmJDktBfgVQeoVXVCVgtNuukS86",
+      "programId": "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw",
+      "realmType": "pda",
+      "notes": "Multisig infrastructure provider; PDA-derived realm — confirmed vanilla"
+    },
+    {
+      "name": "Parcl",
+      "symbol": "PRCL",
+      "realmId": "9Waj7NNTzEhyHf1j1F36xgtnXaLoAxVBFhf6VxE9fgaf",
+      "programId": "Di9ZVJeJrRZdQEWzAFYmfjukjR5dUQb7KMaDmv34rNJg",
+      "realmType": "keypair",
+      "notes": "Tokenized real estate perpetuals"
+    },
+    {
+      "name": "Helium IOT",
+      "symbol": "IOT",
+      "realmId": "8UQNtD5Zw8ijB7ZpGiPLodKXMxtVyQmtu1AEztd3p6Po",
+      "programId": "hgovkRU6Ghe1Qoyb54HdSLdqN7VtxaifBzRmh9jtd3S",
+      "realmType": "keypair",
+      "notes": "Helium IoT subDAO"
+    },
+    {
+      "name": "Jet Protocol",
+      "symbol": "JET",
+      "realmId": "78TbURwqF71Qk4w1Xp6Jd2gaoQb6EC7yKBh5xDJmq6qh",
+      "programId": "JPGov2SBA6f7XSJF5R4Si5jEJekGiyrwP2m7gSEqLUs",
+      "realmType": "keypair",
+      "notes": "Lending protocol DAO"
+    },
+    {
+      "name": "Grape Network",
+      "symbol": "GRAPE",
+      "realmId": "By2sVGZXwfQq6rAiAM3rNPJ9iQfb5e2QhnF4YjJ4Bip",
+      "programId": "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw",
+      "realmType": "pda",
+      "notes": "Community social token DAO; PDA-derived"
+    },
+    {
+      "name": "Mean Finance",
+      "symbol": "MEAN",
+      "realmId": "5o6gEoeJBpuXT1H1ijFTq3KcSGx7ayabdG2hji7cB3FG",
+      "programId": "MGovW65tDhMMcpEmsegpsdgvzb6zUwGsNjhXFxRAnjd",
+      "realmType": "keypair",
+      "notes": "DeFi payment streaming protocol"
+    }
+  ]
+}
