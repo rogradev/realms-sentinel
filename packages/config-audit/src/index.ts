@@ -1,28 +1,31 @@
 import { Connection, PublicKey } from '@solana/web3.js';
-import { SplGovernance, type GovernanceConfig, type RealmV1, type RealmV2, type RealmConfig, type GovernanceAccount } from 'governance-idl-sdk';
+import {
+  SplGovernance,
+  type GovernanceConfig,
+  type RealmV1,
+  type RealmV2,
+  type RealmConfig,
+  type GovernanceAccount,
+} from 'governance-idl-sdk';
 import { createRequire } from 'module';
+import {
+  assessGovernance,
+  renderMarkdownTable,
+  scoreLabel,
+  type DaoRisk,
+  type GovernanceRisk,
+} from './risk.js';
 
 const require = createRequire(import.meta.url);
-const { daos } = require('./dao-list.json') as {
+const { daos: DAO_LIST } = require('./dao-list.json') as {
   daos: Array<{
     name: string;
     symbol: string;
     realmId: string;
     programId: string;
     realmType: 'pda' | 'keypair';
-    notes: string;
   }>;
 };
-
-// ---------------------------------------------------------------------------
-// VoteThreshold — Anchor encodes enum variants as single-key objects.
-// The inner u8 comes off the wire as a Buffer-like object { "0": <value> },
-// not a plain number. We normalise it with extractU8().
-// ---------------------------------------------------------------------------
-type VoteThreshold =
-  | { yesVotePercentage: number | Record<string, number> }
-  | { quorum: number | Record<string, number> }
-  | { disabled: Record<string, never> };
 
 const RPC_URL = process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.com';
 
@@ -32,149 +35,158 @@ const RPC_URL = process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.c
 async function main(): Promise<void> {
   console.log('Realms Sentinel — config-audit  (Phase 0)');
   console.log(`RPC: ${RPC_URL}`);
-  console.log(`Scanning ${daos.length} DAOs from dao-list.json\n`);
+  console.log(`Scanning ${DAO_LIST.length} DAOs from dao-list.json\n`);
 
   const connection = new Connection(RPC_URL, 'confirmed');
 
   let countVanilla = 0;
   let countPlugin  = 0;
-  let countFailed  = 0;
+  let countSkipped = 0;
 
-  for (const dao of daos) {
+  const riskResults: DaoRisk[] = [];
+
+  for (const dao of DAO_LIST) {
     console.log(`── ${dao.symbol}  ${dao.name}`);
-    console.log(`   realm   : ${dao.realmId}`);
-    console.log(`   program : ${dao.programId}`);
 
     const gov = new SplGovernance(connection, new PublicKey(dao.programId));
 
-    // Try V2 layout first; fall back to V1 for older governance forks.
+    // Try V2 layout; fall back to V1 for older governance forks.
     let realm: RealmV2;
     try {
       realm = await gov.getRealmByPubkey(new PublicKey(dao.realmId));
     } catch {
       try {
         const v1 = await gov.getRealmV1ByPubkey(new PublicKey(dao.realmId)) as unknown as RealmV1;
-        console.log(`   ⓘ  RealmV1 account (older IDL layout) — name: ${v1.name}`);
-        console.log(`   Skipping config decode — V1 layout not covered in Phase 0.\n`);
-        countFailed++;
+        console.log(`   ⓘ  RealmV1 (${v1.name}) — older IDL layout, skipping Phase 0.\n`);
+        countSkipped++;
         continue;
       } catch (err2) {
-        console.log(`   ✗ Failed to fetch realm (V1 + V2 both failed): ${(err2 as Error).message}\n`);
-        countFailed++;
+        console.log(`   ✗ Fetch failed: ${(err2 as Error).message}\n`);
+        countSkipped++;
         continue;
       }
     }
 
-    console.log(`   name on-chain: ${realm.name}`);
+    // councilMint lives in the inline RealmConfig struct inside the Realm account.
+    const councilMint = (realm.config as unknown as { councilMint: PublicKey | null }).councilMint ?? null;
 
-    const pluginResult = await checkVanilla(gov, realm);
-    if (pluginResult === 'vanilla') {
-      countVanilla++;
-      await printGovernanceConfigs(gov, realm);
-    } else if (pluginResult === 'plugin') {
+    // Check for voter-weight plugin (VSR) via RealmConfigAccount.
+    const vanilla = await checkVanilla(gov, realm);
+    if (!vanilla) {
       countPlugin++;
-    } else {
-      countFailed++;
+      continue;
     }
+    countVanilla++;
+
+    const govAccounts = await fetchGovernanceAccounts(gov, realm);
+    if (!govAccounts) continue;
+
+    const governances: GovernanceRisk[] = govAccounts.map((ga) => {
+      const cfg = ga.config as GovernanceConfig;
+      return assessGovernance({
+        governancePubkey: ga.publicKey.toBase58(),
+        communityVoteThreshold: cfg.communityVoteThreshold,
+        minCommunityWeightToCreateProposal: cfg.minCommunityWeightToCreateProposal,
+        votingBaseTime: Number(cfg.votingBaseTime),
+        councilMint,
+      });
+    });
+
+    const worstScore = Math.max(0, ...governances.map(g => g.score)) as DaoRisk['worstScore'];
+    const worstGov   = governances.find(g => g.score === worstScore)!;
+
+    riskResults.push({
+      name: dao.name,
+      symbol: dao.symbol,
+      realmPubkey: dao.realmId,
+      governances,
+      worstScore,
+      worstFlags: worstGov.flags,
+    });
+
+    console.log(`   council       : ${councilMint ? councilMint.toBase58().slice(0, 8) + '…' : 'none'}`);
+    console.log(`   gov accounts  : ${govAccounts.length}`);
+    for (const g of governances) {
+      const flagStr = g.flags.length ? g.flags.join(', ') : 'none';
+      console.log(`   ${g.governancePubkey.slice(0, 8)}…  ${g.threshold.padEnd(14)} ${g.votingPeriod.padEnd(6)}  [${flagStr}]  ${scoreLabel(g.score)}`);
+    }
+    console.log('');
   }
 
+  // ---------------------------------------------------------------------------
+  // Summary
+  // ---------------------------------------------------------------------------
   console.log('═'.repeat(62));
-  console.log(`SUMMARY  (${daos.length} DAOs scanned)`);
-  console.log(`  vanilla token-weighted : ${countVanilla}`);
-  console.log(`  uses voter-weight plugin: ${countPlugin}`);
-  console.log(`  fetch / decode errors  : ${countFailed}`);
+  console.log(`SCAN SUMMARY  (${DAO_LIST.length} DAOs)`);
+  console.log(`  vanilla decoded      : ${countVanilla}`);
+  console.log(`  voter-weight plugin  : ${countPlugin}`);
+  console.log(`  skipped (V1/error)   : ${countSkipped}`);
   console.log('═'.repeat(62));
+  console.log('');
+
+  if (riskResults.length === 0) {
+    console.log('No vanilla DAOs decoded — no risk table to show.');
+    return;
+  }
+
+  console.log('## Realms Sentinel — Phase 0 Risk Report\n');
+  console.log(`*${DAO_LIST.length} DAOs scanned · ${countVanilla} vanilla decoded · ${countPlugin} VSR plugin · ${countSkipped} skipped*\n`);
+  console.log('### Risk flag legend');
+  console.log('- **SOLO_VOTE** — community proposals enabled + yesVotePercentage threshold: a single wallet can create a proposal, vote alone, and achieve 100% of cast votes → passes any threshold');
+  console.log('- **LOW_THRESHOLD** — yesVotePercentage < 50%: even with competition, only a small fraction of cast votes is needed');
+  console.log('- **NO_COUNCIL** — no guardian token with veto rights\n');
+  console.log('### Per-governance breakdown\n');
+  console.log(renderMarkdownTable(riskResults));
+  console.log('');
+
+  // Per-DAO summary
+  console.log('### Per-DAO worst-case\n');
+  const summaryRows = riskResults.map(dao => [
+    `${dao.symbol} (${dao.name})`,
+    String(dao.governances.length),
+    dao.worstFlags.length ? dao.worstFlags.join(' ') : '—',
+    scoreLabel(dao.worstScore),
+  ]);
+  const sumHeaders = ['DAO', 'Govs', 'Worst flags', 'Risk'];
+  const sumWidths = sumHeaders.map((h, i) => Math.max(h.length, ...summaryRows.map(r => r[i]?.length ?? 0)));
+  const sumLine = (cells: string[]): string =>
+    '| ' + cells.map((c, i) => (c + ' '.repeat(sumWidths[i])).slice(0, sumWidths[i])).join(' | ') + ' |';
+  const sumSep  = '| ' + sumWidths.map(w => '-'.repeat(w)).join(' | ') + ' |';
+  console.log([sumLine(sumHeaders), sumSep, ...summaryRows.map(sumLine)].join('\n'));
+  console.log('');
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function checkVanilla(
-  gov: SplGovernance,
-  realm: RealmV2,
-): Promise<'vanilla' | 'plugin' | 'error'> {
+async function checkVanilla(gov: SplGovernance, realm: RealmV2): Promise<boolean> {
   let cfg: RealmConfig | null = null;
-
   try {
     cfg = await gov.getRealmConfigByRealm(realm.publicKey);
   } catch {
-    console.log(`   ✓ No RealmConfigAccount → vanilla (no plugin possible)\n`);
-    return 'vanilla';
+    console.log(`   ✓ No RealmConfigAccount → vanilla`);
+    return true;
   }
-
   const addin = cfg.communityTokenConfig.voterWeightAddin as PublicKey | null;
-
   if (addin) {
-    console.log(`   ⚠  voter-weight plugin: ${addin.toBase58()}`);
-    console.log(`   Skipping config decode — Phase 0 covers vanilla DAOs only.\n`);
-    return 'plugin';
+    console.log(`   ⚠  VSR plugin: ${addin.toBase58().slice(0, 8)}…  — skipping.\n`);
+    return false;
   }
-
-  console.log(`   ✓ No voter-weight plugin — vanilla token-weighted.`);
-  return 'vanilla';
+  console.log(`   ✓ Vanilla (no voter-weight plugin)`);
+  return true;
 }
 
-async function printGovernanceConfigs(
+async function fetchGovernanceAccounts(
   gov: SplGovernance,
   realm: RealmV2,
-): Promise<void> {
-  let accounts: GovernanceAccount[];
+): Promise<GovernanceAccount[] | null> {
   try {
-    accounts = await gov.getGovernanceAccountsByRealm(realm.publicKey);
+    return await gov.getGovernanceAccountsByRealm(realm.publicKey);
   } catch (err) {
-    console.log(`   ✗ Failed to fetch governance accounts: ${(err as Error).message}\n`);
-    return;
+    console.log(`   ✗ Governance fetch failed: ${(err as Error).message}\n`);
+    return null;
   }
-
-  if (accounts.length === 0) {
-    console.log(`   (no governance accounts found)\n`);
-    return;
-  }
-
-  for (const ga of accounts) {
-    const cfg = ga.config as GovernanceConfig;
-    console.log(`   gov ${ga.publicKey.toBase58().slice(0, 8)}…`);
-    console.log(`     approval threshold : ${formatVoteThreshold(cfg.communityVoteThreshold as VoteThreshold)}`);
-    console.log(`     min weight         : ${formatMinWeight(cfg.minCommunityWeightToCreateProposal)}`);
-    console.log(`     voting period      : ${formatDuration(Number(cfg.votingBaseTime))}`);
-  }
-  console.log('');
-}
-
-// Anchor serialises u8 enum fields as a Buffer-like { "0": value } object.
-function extractU8(v: number | Record<string, number>): number {
-  if (typeof v === 'number') return v;
-  return Object.values(v)[0] ?? 0;
-}
-
-function formatVoteThreshold(t: VoteThreshold): string {
-  if ('yesVotePercentage' in t) return `${extractU8(t.yesVotePercentage)}% yes`;
-  if ('quorum' in t)            return `${extractU8(t.quorum)}% quorum`;
-  if ('disabled' in t)          return 'disabled';
-  return JSON.stringify(t);
-}
-
-// u64::MAX is the sentinel used by SPL Governance to signal "disabled"
-// (effectively: no community member can create a proposal directly).
-const U64_MAX = '18446744073709551615';
-
-function formatMinWeight(raw: unknown): string {
-  const s = String(raw);
-  return s === U64_MAX ? 'u64::MAX (proposals disabled)' : `${s} base units`;
-}
-
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return `${seconds}s`;
-  const d = Math.floor(seconds / 86_400);
-  const h = Math.floor((seconds % 86_400) / 3_600);
-  const m = Math.floor((seconds % 3_600) / 60);
-  const parts: string[] = [];
-  if (d) parts.push(`${d}d`);
-  if (h) parts.push(`${h}h`);
-  if (m) parts.push(`${m}m`);
-  if (!parts.length) parts.push(`${seconds}s`);
-  return `${parts.join(' ')} (${seconds}s)`;
 }
 
 main().catch((err: unknown) => {
